@@ -161,31 +161,41 @@ class AnalysisController:
         limit: int = 50
     ) -> List[AnalysisSession]:
         """
-        Busca sesiones de análisis usando expresiones regulares.
-        Busca en yaml_config y answers.
+        Busca sesiones de análisis en TODO el contenido del YAML y respuestas.
+        Convierte el YAML completo a string para búsqueda universal.
         """
-        # Crear el filtro de búsqueda por texto usando $or y $regex
-        search_filter = {
-            "$or": [
-                {"yaml_config.title": {"$regex": query, "$options": "i"}},
-                {"yaml_config.description": {"$regex": query, "$options": "i"}},
-                {"yaml_config.sections.questions.question": {"$regex": query, "$options": "i"}},
-                {"yaml_config.sections.questions.description": {"$regex": query, "$options": "i"}},
-                {"answers.answer": {"$regex": query, "$options": "i"}}
-            ]
-        }
+        import json
         
-        # Agregar filtros opcionales
+        # Construir filtro base
+        base_filter = {}
         if project_id:
-            search_filter["project"] = project_id
-        
+            base_filter["project"] = project_id
         if analysis_type:
-            search_filter["analysis_type"] = analysis_type
+            base_filter["analysis_type"] = analysis_type
         
-        # Ejecutar búsqueda
-        sessions = await AnalysisSession.find(search_filter)\
-            .sort("-created_at")\
-            .limit(limit)\
-            .to_list()
+        # Obtener todas las sesiones que cumplan filtros base
+        all_sessions = await AnalysisSession.find(base_filter).to_list()
         
-        return sessions
+        # Filtrar en Python buscando en todo el contenido
+        query_lower = query.lower()
+        matching_sessions = []
+        
+        for session in all_sessions:
+            # Convertir YAML config completo a JSON string
+            yaml_str = json.dumps(session.yaml_config, ensure_ascii=False).lower()
+            
+            # Convertir answers completo a JSON string
+            answers_str = json.dumps(session.answers or {}, ensure_ascii=False).lower()
+            
+            # Buscar en ambos strings
+            if query_lower in yaml_str or query_lower in answers_str:
+                matching_sessions.append(session)
+                
+                # Limitar resultados
+                if len(matching_sessions) >= limit:
+                    break
+        
+        # Ordenar por fecha (más recientes primero)
+        matching_sessions.sort(key=lambda x: x.created_at, reverse=True)
+        
+        return matching_sessions[:limit]
