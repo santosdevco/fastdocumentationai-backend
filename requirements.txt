@@ -24,3 +24,4 @@ passlib[bcrypt]==1.7.4
 # Development
 pytest==7.4.3
 httpx==0.25.2
+gunicorn

@@ -1,7 +1,7 @@
 """
 Controlador de Sesiones de Análisis
 """
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from beanie import PydanticObjectId
 from datetime import datetime
 
@@ -149,6 +149,43 @@ class AnalysisController:
         
         sessions = await AnalysisSession.find(query)\
             .sort("-created_at")\
+            .to_list()
+        
+        return sessions
+
+    @staticmethod
+    async def search_analyses(
+        query: str,
+        project_id: Optional[PydanticObjectId] = None,
+        analysis_type: Optional[AnalysisType] = None,
+        limit: int = 50
+    ) -> List[AnalysisSession]:
+        """
+        Busca sesiones de análisis usando expresiones regulares.
+        Busca en yaml_config y answers.
+        """
+        # Crear el filtro de búsqueda por texto usando $or y $regex
+        search_filter = {
+            "$or": [
+                {"yaml_config.title": {"$regex": query, "$options": "i"}},
+                {"yaml_config.description": {"$regex": query, "$options": "i"}},
+                {"yaml_config.sections.questions.question": {"$regex": query, "$options": "i"}},
+                {"yaml_config.sections.questions.description": {"$regex": query, "$options": "i"}},
+                {"answers.answer": {"$regex": query, "$options": "i"}}
+            ]
+        }
+        
+        # Agregar filtros opcionales
+        if project_id:
+            search_filter["project"] = project_id
+        
+        if analysis_type:
+            search_filter["analysis_type"] = analysis_type
+        
+        # Ejecutar búsqueda
+        sessions = await AnalysisSession.find(search_filter)\
+            .sort("-created_at")\
+            .limit(limit)\
             .to_list()
         
         return sessions

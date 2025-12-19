@@ -266,3 +266,54 @@ async def update_public_answers(share_token: str, data: AnswersUpdate):
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(e)
         )
+
+
+@router.get("/search/analyses", response_model=List[AnalysisResponse])
+async def search_analyses(
+    q: str,
+    project_id: str = None,
+    analysis_type: AnalysisType = None,
+    limit: int = 50
+):
+    """
+    Busca sesiones de análisis por texto en:
+    - Título del YAML
+    - Descripción del YAML
+    - Preguntas del YAML
+    - Respuestas del experto
+    """
+    try:
+        sessions = await AnalysisController.search_analyses(
+            query=q,
+            project_id=PydanticObjectId(project_id) if project_id else None,
+            analysis_type=analysis_type,
+            limit=limit
+        )
+        
+        result = []
+        for session in sessions:
+            await session.fetch_link('project')
+            result.append(AnalysisResponse(
+                id=str(session.id),
+                project_id=str(session.project.id),
+                project_name=session.project.name,
+                analysis_type=session.analysis_type,
+                status=session.status,
+                yaml_config=session.yaml_config,
+                answers=session.answers,
+                iteration=session.iteration,
+                needs_more_info=session.needs_more_info,
+                share_token=session.share_token,
+                share_url=session.get_share_url(settings.frontend_url),
+                created_by=session.created_by,
+                assigned_to=session.assigned_to,
+                created_at=session.created_at,
+                updated_at=session.updated_at
+            ))
+        
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(e)
+        )
